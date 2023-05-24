@@ -1,19 +1,19 @@
 // External Dependencies
-const fs     = require('fs');
+const fs = require('fs');
 const github = require('@actions/github');
-const core   = require('@actions/core');
+const core = require('@actions/core');
 
 const context = github.context;
-const repo    = context.payload.repository;
-const owner   = repo.owner;
+const repo = context.payload.repository;
+const owner = repo.owner;
 
-const FILES          = new Set();
-const FILES_ADDED    = new Set();
+const FILES = new Set();
+const FILES_ADDED = new Set();
 const FILES_MODIFIED = new Set();
-const FILES_REMOVED  = new Set();
-const FILES_RENAMED  = new Set();
+const FILES_REMOVED = new Set();
+const FILES_RENAMED = new Set();
 
-const gh   = github.getOctokit(core.getInput('token'));
+const gh = github.getOctokit(core.getInput('token'));
 const args = { owner: owner.name || owner.login, repo: repo.name };
 
 
@@ -26,7 +26,7 @@ function fetchCommitData(commit) {
 
 	debug('Calling gh.repos.getCommit() with args', args)
 
-	return gh.repos.getCommit(args);
+	return gh.rest.repos.getCommit(args);
 }
 
 function formatLogMessage(msg, obj = null) {
@@ -38,22 +38,23 @@ async function getCommits() {
 
 	debug('Getting commits...');
 
-	switch(context.eventName) {
+	switch (context.eventName) {
 		case 'push':
 			commits = context.payload.commits;
-		break;
+			break;
 
+		case 'pull_request_target':
 		case 'pull_request':
 			const url = context.payload.pull_request.commits_url;
 
 			commits = await gh.paginate(`GET ${url}`, args);
-		break;
+			break;
 
 		default:
-			info('You are using this action on an event for which it has not been tested. Only the "push" and "pull_request" events are officially supported.');
+			info('You are using this action on an event for which it has not been tested. Only the "push", "pull_request" and "pull_request_target" events are officially supported.');
 
 			commits = [];
-		break;
+			break;
 	}
 
 	return commits;
@@ -102,7 +103,7 @@ async function outputResults() {
 async function processCommitData(result) {
 	debug('Processing API Response', result);
 
-	if (! result || ! result.data) {
+	if (!result || !result.data) {
 		return;
 	}
 
@@ -117,7 +118,7 @@ async function processCommitData(result) {
 		}
 
 		if (isRemoved(file)) {
-			if (! FILES_ADDED.has(file.filename)) {
+			if (!FILES_ADDED.has(file.filename)) {
 				FILES_REMOVED.add(file.filename);
 			}
 
@@ -146,7 +147,7 @@ function processRenamedFile(prev_file, new_file) {
 	FILES_RENAMED.add(new_file);
 }
 
-function toJSON(value, pretty=true) {
+function toJSON(value, pretty = true) {
 	return pretty
 		? JSON.stringify(value, null, 4)
 		: JSON.stringify(value);
@@ -158,7 +159,7 @@ debug('args', args);
 
 getCommits().then(commits => {
 	// Exclude merge commits
-	commits = commits.filter(c => ! c.parents || 1 === c.parents.length);
+	commits = commits.filter(c => !c.parents || 1 === c.parents.length);
 
 	if ('push' === context.eventName) {
 		commits = commits.filter(c => c.distinct);
@@ -172,4 +173,3 @@ getCommits().then(commits => {
 		.then(() => process.exitCode = 0)
 		.catch(err => core.error(err) && (process.exitCode = 1));
 });
-
